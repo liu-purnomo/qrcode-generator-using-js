@@ -4,55 +4,346 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>qr code generator</title>
+  <title>QR Code Generator - Advanced</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
 <div class="form">
-  <h1>QR Code generator</h1>
+  <h1>QR Code Generator</h1>
   <form>
-    <input type="url" id="website" name="website" placeholder="https://liupurnomo.com" required />
+    <!-- URL Input -->
+    <div class="form-group">
+      <label for="website">URL / Text:</label>
+      <input type="text" id="website" name="website" placeholder="https://liupurnomo.com" required />
+    </div>
+
+    <!-- Size Control -->
+    <div class="form-group">
+      <label for="size">Size: <span id="sizeValue">256</span>px</label>
+      <input type="range" id="size" name="size" min="128" max="512" value="256" step="32" />
+    </div>
+
+    <!-- Foreground Color -->
+    <div class="form-group">
+      <label for="foreground">QR Code Color:</label>
+      <div class="color-input-group">
+        <input type="color" id="foreground" name="foreground" value="#000000" />
+        <input type="text" id="foregroundText" value="#000000" class="color-text" />
+      </div>
+    </div>
+
+    <!-- Background Color -->
+    <div class="form-group">
+      <label for="background">Background Color:</label>
+      <div class="color-input-group">
+        <input type="color" id="background" name="background" value="#ffffff" />
+        <input type="text" id="backgroundText" value="#ffffff" class="color-text" />
+      </div>
+    </div>
+
+    <!-- Error Correction Level (affects finder pattern density) -->
+    <div class="form-group">
+      <label for="level">Error Correction Level:</label>
+      <select id="level" name="level">
+        <option value="L">Low (7%)</option>
+        <option value="M">Medium (15%)</option>
+        <option value="Q">Quartile (25%)</option>
+        <option value="H" selected>High (30%)</option>
+      </select>
+      <small>Higher levels allow more customization and logo overlay</small>
+    </div>
+
+    <!-- Finder Pattern Style -->
+    <div class="form-group">
+      <label for="finderStyle">Finder Pattern Style:</label>
+      <select id="finderStyle" name="finderStyle">
+        <option value="square">Square (Default)</option>
+        <option value="rounded">Rounded</option>
+        <option value="dots">Dots</option>
+        <option value="extra-rounded">Extra Rounded</option>
+      </select>
+    </div>
+
+    <!-- Icon/Logo Upload -->
+    <div class="form-group">
+      <label for="logo">Logo/Icon (optional):</label>
+      <input type="file" id="logo" name="logo" accept="image/*" />
+      <small>Logo will be centered on the QR code</small>
+    </div>
+
+    <!-- Logo Size -->
+    <div class="form-group">
+      <label for="logoSize">Logo Size: <span id="logoSizeValue">20</span>%</label>
+      <input type="range" id="logoSize" name="logoSize" min="10" max="30" value="20" step="5" />
+    </div>
+
+    <!-- Generate Button -->
     <button class="center" type="button" onclick="generateQRCode()">
       Generate QR Code
     </button>
   </form>
 
-  <div  id="qrcode-container">
-    <canvas id="qrcode" class="qrcode"></canvas>
-    <h4 class="center">With some styles</h4>
-    <canvas id="qrcode-2" class="qrcode"></canvas>
+  <div id="qrcode-container">
+    <h3 class="center">Your QR Code</h3>
+    <div class="qrcode-wrapper">
+      <canvas id="qrcode" class="qrcode"></canvas>
+    </div>
+    <div class="button-group">
+      <button onclick="downloadQRCode('png')">Download PNG</button>
+      <button onclick="downloadQRCode('jpg')">Download JPG</button>
+      <button onclick="downloadQRCode('svg')">Download SVG</button>
+    </div>
   </div>
 
   <script type="text/javascript">
+    let logoImage = null;
+    let currentQRValue = null;
+
+    // Update size display
+    document.getElementById('size').addEventListener('input', function() {
+      document.getElementById('sizeValue').textContent = this.value;
+    });
+
+    // Update logo size display
+    document.getElementById('logoSize').addEventListener('input', function() {
+      document.getElementById('logoSizeValue').textContent = this.value;
+    });
+
+    // Sync color picker with text input (foreground)
+    document.getElementById('foreground').addEventListener('input', function() {
+      document.getElementById('foregroundText').value = this.value;
+    });
+    document.getElementById('foregroundText').addEventListener('input', function() {
+      document.getElementById('foreground').value = this.value;
+    });
+
+    // Sync color picker with text input (background)
+    document.getElementById('background').addEventListener('input', function() {
+      document.getElementById('backgroundText').value = this.value;
+    });
+    document.getElementById('backgroundText').addEventListener('input', function() {
+      document.getElementById('background').value = this.value;
+    });
+
+    // Handle logo upload
+    document.getElementById('logo').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const img = new Image();
+          img.onload = function() {
+            logoImage = img;
+            if (currentQRValue) {
+              generateQRCode(); // Regenerate with logo
+            }
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        logoImage = null;
+      }
+    });
+
     function generateQRCode() {
       let website = document.getElementById("website").value;
       if (website) {
+        currentQRValue = website;
+
+        // Get customization values
+        const size = parseInt(document.getElementById("size").value);
+        const foreground = document.getElementById("foreground").value;
+        const background = document.getElementById("background").value;
+        const level = document.getElementById("level").value;
+        const finderStyle = document.getElementById("finderStyle").value;
+        const logoSize = parseInt(document.getElementById("logoSize").value);
+
         let qrcodeContainer = document.getElementById("qrcode");
-        qrcodeContainer.innerHTML = "";
+
+        // Generate base QR code
         new QRious({
           element: qrcodeContainer,
-          value: website
+          value: website,
+          size: size,
+          background: background,
+          foreground: foreground,
+          level: level,
+          padding: 0
         });
-        /*With some styles*/
-        let qrcodeContainer2 = document.getElementById("qrcode-2"); 
-        qrcodeContainer2.innerHTML = "";
-        new QRious({
-          element: qrcodeContainer2, 
-          background: '#ffffff',
-          backgroundAlpha: 1,
-          foreground: '#5868bf',
-          foregroundAlpha: 1,
-          level: 'H',
-          padding: 0,
-          size: 128,
-          value: website
-        });
+
+        // Apply finder pattern style
+        applyFinderStyle(qrcodeContainer, finderStyle, foreground, background);
+
+        // Add logo if uploaded
+        if (logoImage) {
+          addLogoToQR(qrcodeContainer, logoImage, logoSize);
+        }
+
         document.getElementById("qrcode-container").style.display = "block";
       } else {
-        alert("Please enter a valid URL");
+        alert("Please enter a valid URL or text");
       }
+    }
+
+    function applyFinderStyle(canvas, style, foreground, background) {
+      if (style === 'square') return; // Default style, no changes needed
+
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+      const moduleSize = size / 41; // Approximate module count for QR code
+
+      // Finder pattern positions (approximate)
+      const finderPositions = [
+        { x: 0, y: 0 },           // Top-left
+        { x: size - 7 * moduleSize, y: 0 },  // Top-right
+        { x: 0, y: size - 7 * moduleSize }   // Bottom-left
+      ];
+
+      finderPositions.forEach(pos => {
+        customizeFinder(ctx, pos.x, pos.y, moduleSize * 7, style, foreground, background);
+      });
+    }
+
+    function customizeFinder(ctx, x, y, finderSize, style, foreground, background) {
+      const moduleSize = finderSize / 7;
+
+      // Clear the finder area
+      ctx.fillStyle = background;
+      ctx.fillRect(x, y, finderSize, finderSize);
+
+      ctx.fillStyle = foreground;
+
+      switch(style) {
+        case 'rounded':
+          // Outer rounded square
+          roundedRect(ctx, x, y, finderSize, finderSize, moduleSize * 0.5);
+          // Inner white rounded square
+          ctx.fillStyle = background;
+          roundedRect(ctx, x + moduleSize, y + moduleSize, finderSize - 2 * moduleSize, finderSize - 2 * moduleSize, moduleSize * 0.3);
+          // Center rounded square
+          ctx.fillStyle = foreground;
+          roundedRect(ctx, x + 2 * moduleSize, y + 2 * moduleSize, finderSize - 4 * moduleSize, finderSize - 4 * moduleSize, moduleSize * 0.3);
+          break;
+
+        case 'dots':
+          // Outer circle
+          ctx.beginPath();
+          ctx.arc(x + finderSize / 2, y + finderSize / 2, finderSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+          // Inner white circle
+          ctx.fillStyle = background;
+          ctx.beginPath();
+          ctx.arc(x + finderSize / 2, y + finderSize / 2, finderSize / 2 - moduleSize, 0, Math.PI * 2);
+          ctx.fill();
+          // Center circle
+          ctx.fillStyle = foreground;
+          ctx.beginPath();
+          ctx.arc(x + finderSize / 2, y + finderSize / 2, finderSize / 2 - 2 * moduleSize, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+
+        case 'extra-rounded':
+          // Outer extra rounded square
+          roundedRect(ctx, x, y, finderSize, finderSize, moduleSize * 1.5);
+          // Inner white rounded square
+          ctx.fillStyle = background;
+          roundedRect(ctx, x + moduleSize, y + moduleSize, finderSize - 2 * moduleSize, finderSize - 2 * moduleSize, moduleSize);
+          // Center rounded square
+          ctx.fillStyle = foreground;
+          roundedRect(ctx, x + 2 * moduleSize, y + 2 * moduleSize, finderSize - 4 * moduleSize, finderSize - 4 * moduleSize, moduleSize * 0.8);
+          break;
+      }
+    }
+
+    function roundedRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function addLogoToQR(canvas, logo, logoSizePercent) {
+      const ctx = canvas.getContext('2d');
+      const canvasSize = canvas.width;
+      const logoSize = (canvasSize * logoSizePercent) / 100;
+      const x = (canvasSize - logoSize) / 2;
+      const y = (canvasSize - logoSize) / 2;
+
+      // Add white background circle for logo
+      ctx.fillStyle = '#ffffff';
+      const padding = logoSize * 0.1;
+      ctx.beginPath();
+      ctx.arc(canvasSize / 2, canvasSize / 2, (logoSize + padding * 2) / 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw logo
+      ctx.drawImage(logo, x, y, logoSize, logoSize);
+    }
+
+    function downloadQRCode(format) {
+      const canvas = document.getElementById("qrcode");
+
+      if (format === 'svg') {
+        // For SVG, we'll create a data URL with SVG markup
+        const svgData = canvasToSVG(canvas);
+        const blob = new Blob([svgData], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'qrcode.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // For PNG and JPG
+        const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+        canvas.toBlob(function(blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `qrcode.${format}`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }, mimeType);
+      }
+    }
+
+    function canvasToSVG(canvas) {
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}">`;
+      svg += `<rect width="${canvas.width}" height="${canvas.height}" fill="${document.getElementById('background').value}"/>`;
+
+      // Simple pixel-to-rect conversion
+      const pixelSize = 1;
+      for (let y = 0; y < canvas.height; y += pixelSize) {
+        for (let x = 0; x < canvas.width; x += pixelSize) {
+          const i = (y * canvas.width + x) * 4;
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+
+          if (a > 128 && (r + g + b) / 3 < 128) { // Dark pixel
+            svg += `<rect x="${x}" y="${y}" width="${pixelSize}" height="${pixelSize}" fill="${document.getElementById('foreground').value}"/>`;
+          }
+        }
+      }
+
+      svg += '</svg>';
+      return svg;
     }
   </script>
 </div>
